@@ -1,0 +1,38 @@
+What is this?
+
+This is a driver for serial SPF touchscreen panels, such as the carrolltouch units from ELO.
+
+For more information on the SPF standard, please see http://media.elotouch.com/pdfs/manuals/program.pdf
+
+The generic sequence for initializing an SFP panel is as follows:
+
+Send:
+break
+0x0D -> about 5 times, for auto baud detection
+0x3C - Software reset
+0x32 - Generate Error report
+0x44 - Report Transfer
+
+Receive:
+F8 - Report header
+00 - no errors
+FF - end of report
+
+Send panel options:
+0x23 - coordinate reporting
+0x26 or 0x27
+( 0x29 ) - Add_exit_point_modifier - Sends a packet indicating finger removed
+0x2A - Starts touch scanning
+
+----
+0x26 - Tracking mode - Sends only 1 packet per touch
+0x27 - continuous mode - Sends continuously, even if no changes
+----
+
+The unit will now send a 4 Byte packet every time it is pressed:
+0xFE or 0xFD
+0xXX
+0xYY
+0xFF
+
+0xFE = finger down, 0xFD = finger released.
