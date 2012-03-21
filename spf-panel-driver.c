@@ -10,7 +10,20 @@
 #include <linux/uinput.h>
 
 /*
-This is attempt 1.1 at making a uinput based SFP driver.
+This is attempt 0.1.1 at makiing a uinput based SFP driver.
+
+
+Latest changes:
+0.1.1
+- Added no-drag timer.
+  - Only the first movement is used for the first 500ms, to prevent clicks from being misinterpretted as dragging. To drag, hold down and then drag.
+  - I plan to experiment with this value to find a reasonable default value, and make it parametized.
+
+Todo:
+- Figure out how to probe monitor while in touch scan mode
+  - (use a long select timeout on the read, to test monitor every 5-10 minutes or so)
+- Detect many 0's in a row, indicated panel has been reset, and re-initialize it
+- Better parameter handling (eg: $0 --port /dev/ttyS0 --timeout 250 )
 
 */
 
@@ -41,7 +54,7 @@ main (int argc, char *argv[])
   }
 
   open_serial_port (argv[1]);		// Open serial port
-  set_serial_ops ();	//configure serial port options
+  set_serial_ops ();	//configure serial port optionS
 
 
 // configure uinput
@@ -79,38 +92,15 @@ else
   ev_button[1].code = BTN_LEFT;
   ev_button[1].value = 1;
 
-/* 
-*
-* Optional select code for timeout based actions.
-* Useful for if no event received
-* Since it always sends mouse-up, there is no real reason to need this code...
-*
 
-  struct timeval tv;
-  tv.tv_sec = 0;
-  tv.tv_usec = 500000; // 500ms click timeout
+  struct timeval tv_start_click;
+  struct timeval tv_current;
 
-  fd_set serial_set;
-  FD_ZERO (&serial_set);
-  FD_SET (fd_serial, &serial_set);
-  fd_set read_set;
-
-*/
   char click_state = 0;
+  char first_click = 0;
   unsigned char buffer[4];
   while (1)
     {
-
-/*
-      read_set = serial_set;
-      if (select(fd_serial+1,&read_set,0,0,&tv) < 0)
-  	FD_ZERO(&read_set);
-
- if (!FD_ISSET(fd_serial,&read_set))
-{
-	 continue;
-      }
-*/
 
       read (fd_serial, &buffer, sizeof (buffer));
       if ((buffer[0] >= 0xFD) && (buffer[3] != 0xFF))
@@ -124,6 +114,16 @@ else
       else
 	click_state = 1;
 
+// If this is the first panel event, track time for no-drag timer
+if (click_state != old_click_state && click_state == 1)
+{
+first_click = 1;
+gettimeofday(&tv_start_click,NULL);
+}
+else
+first_click=0;
+
+
 // load X,Y into input_events
       memset (ev, 0, sizeof (ev));	//resets object
       ev[0].type = EV_ABS;
@@ -132,11 +132,17 @@ else
       ev[1].type = EV_ABS;
       ev[1].code = ABS_Y;
       ev[1].value = y;
+
 // send X,Y
+gettimeofday(&tv_current,NULL); // Only move to posision of click for first while - prevents accidental dragging.
+if (time_elapsed_ms(&tv_start_click,&tv_current,500) || first_click)
+{
       if (write (fd_uinput, &ev[0], sizeof (struct input_event)) < 0)
 	die ("error: write");
       if (write (fd_uinput, &ev[1], sizeof (struct input_event)) < 0)
 	die ("error: write");
+}
+
 // clicking
       if (click_state != old_click_state)
 	  if (write(fd_uinput, &ev_button[click_state],sizeof (struct input_event)) < 0)
@@ -155,6 +161,13 @@ else
   return 0;
 }
 
+
+int time_elapsed_ms(struct timeval *start, struct timeval *end, int ms){
+int difference = (end->tv_usec + end->tv_sec * 1000000) - (start->tv_usec + end->tv_sec * 1000000);
+if (difference > ms*1000)
+return 1;
+return 0;
+}
 
 int setup_uinput(void){
   fd_uinput = open ("/dev/uinput", O_WRONLY | O_NONBLOCK);
