@@ -117,8 +117,8 @@ else
 // If this is the first panel event, track time for no-drag timer
 if (click_state != old_click_state && click_state == 1)
 {
-first_click = 1;
-gettimeofday(&tv_start_click,NULL);
+	first_click = 1;
+	gettimeofday(&tv_start_click,NULL);
 }
 else
 first_click=0;
@@ -163,9 +163,9 @@ if (time_elapsed_ms(&tv_start_click,&tv_current,500) || first_click)
 
 
 int time_elapsed_ms(struct timeval *start, struct timeval *end, int ms){
-int difference = (end->tv_usec + end->tv_sec * 1000000) - (start->tv_usec + end->tv_sec * 1000000);
+int difference = (end->tv_usec + end->tv_sec * 1000000 ) - (start->tv_usec + start ->tv_sec * 1000000);
 if (difference > ms*1000)
-return 1;
+	return 1;
 return 0;
 }
 
