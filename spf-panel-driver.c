@@ -101,11 +101,44 @@ else
   unsigned char buffer[4];
   while (1)
     {
+	// Should have select timeout, because finger down garantees many results..
 
+  struct timeval tv;
+  tv.tv_sec = 1;
+  tv.tv_usec = 0;
+
+  fd_set serial;
+  FD_ZERO (&serial);
+  FD_SET (fd_serial, &serial);
+
+	// Use select to use timeout...
+	if (select(fd_serial+1,&serial,NULL,NULL,&tv) < 1)
+	{
+	first_click=0;
+	click_state =0;
+
+	  if (write(fd_uinput, &ev_button[click_state],sizeof (struct input_event)) < 0)
+	      die ("error: write");
+	// Sync
+      if (write (fd_uinput, &ev_sync, sizeof (struct input_event)) < 0)
+	      die ("error state");
+		
+
+continue;
+	}
       read (fd_serial, &buffer, sizeof (buffer));
-      if ((buffer[0] >= 0xFD) && (buffer[3] != 0xFF))
+      if ((buffer[0] < 0xFD) || (buffer[3] != 0xFF))
+      {
+	// Correct missed packets...
+	if ((buffer[1] >= 0xFD) && (buffer[1] < 0xFF))
+		read(fd_serial, &buffer,3);
+	if ((buffer[2] >= 0xFD) && (buffer[2] < 0xFF))
+		read(fd_serial, &buffer,2);
+	if ((buffer[3] >= 0xFD) && (buffer[3] < 0xFF))
+		read(fd_serial, &buffer,1);
+	   
 	continue;		// make sure its a valid position command.
-
+      }
       x = (int) ((buffer[1]) * 1024.0 / 0x5F);	// max is 5F
       y = (int) ((buffer[2]) * 1024.0 / 0x48);	// max is 48
       int old_click_state = click_state;
@@ -121,7 +154,7 @@ if (click_state != old_click_state && click_state == 1)
 	gettimeofday(&tv_start_click,NULL);
 }
 else
-first_click=0;
+	first_click=0;
 
 
 // load X,Y into input_events
@@ -145,13 +178,14 @@ if (time_elapsed_ms(&tv_start_click,&tv_current,500) || first_click)
 
 // clicking
       if (click_state != old_click_state)
+      {
 	  if (write(fd_uinput, &ev_button[click_state],sizeof (struct input_event)) < 0)
-	    die ("error: write");
+	      die ("error: write");
+      }
 // Sync
       if (write (fd_uinput, &ev_sync, sizeof (struct input_event)) < 0)
 	die ("error: write");
-      usleep (100);
-    }				// while 1
+   }				// while 1
 
   if (ioctl (fd_uinput, UI_DEV_DESTROY) < 0)
     die ("error: ioctl");
